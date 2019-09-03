@@ -18,7 +18,8 @@ const int SUB = 26;  // CTRL + Z
 
 int SENTINELS[] = {ETX, SUB};
 
-const int MAX_SERIAL_BUFFER_SIZE = 64;
+const int SERIAL_BUFFER_SIZE = 64;
+const int INPUT_BUFFER_SIZE = SERIAL_BUFFER_SIZE * 10;
 
 /**
  * Initialization that gets run when you press reset or power the board
@@ -39,20 +40,22 @@ void setup()
 /**
  * Retrieves user input from the serial port
  * 
- * @param userInput The character buffer to store the user input into
+ * @param userInput Character buffer to store the user input data
  * 
- * @return Flag denoting whether the user string is complete or not
+ * @return Flag denoting whether all user input has been retrieved or not
  */
-bool getUserInput(String & userInput)
+bool getUserInput(char * userInput)
 {
   static int charIndex = 0;
   
   while(Serial.available())
   {
+    // Read a character from the serial buffer
     char serialInput = Serial.read();
 
-    // Check to see if reached the end of the string
-    if(serialInput == LF || serialInput == CR)
+    //TODO: Prevent empty strings (hitting enter with nothing else)
+    // Check to see if all user input has been retrieved or input buffer is full
+    if(serialInput == LF || serialInput == CR || charIndex == INPUT_BUFFER_SIZE)
     {
       charIndex = 0;
       
@@ -73,17 +76,26 @@ bool getUserInput(String & userInput)
       }
     }
 
-    userInput += serialInput;
+    userInput[charIndex] = serialInput;
     charIndex++;
-
-    // Check to see if end of serial buffer has been reached
-    if(charIndex == MAX_SERIAL_BUFFER_SIZE)
-    {
-      break;
-    }
   }
 
   return false;
+}
+
+/**
+ * Flushes the serial buffer
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+void flushSerialBuffer()
+{
+  while(Serial.available())
+  {
+    Serial.read();
+  }
 }
 
 /**
@@ -95,16 +107,15 @@ bool getUserInput(String & userInput)
  */
 void loop()
 {
-  //TODO: Use large char buffer to cap size and improve speed? See old commit
-  static String userInput("");
+  static char userInput[INPUT_BUFFER_SIZE + 1];
   static bool needNewString = true;
   
   // Prompt the user to enter a string
   if(needNewString == true)
   {
-    Serial.println("Please type something and press enter to output as morse code...");
+    Serial.println("Please type something to output as morse code (max " + String(INPUT_BUFFER_SIZE) + " characters).");
 
-    userInput = "";
+    memset(userInput, 0, sizeof(userInput));
     needNewString = false;
   }
 
@@ -128,6 +139,8 @@ void loop()
     if(hasAllUserInput)
     {
       needNewString = true;
+
+      flushSerialBuffer();
     }
   }
 }
