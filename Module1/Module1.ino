@@ -37,59 +37,13 @@ void setup()
 }
 
 /**
- * Runs indefinitely unless a sentinel signal is received
- * 
- * @param None
- * 
- * @return None
- */
-void loop()
-{
-  static char userInput[MAX_SERIAL_BUFFER_SIZE + 1];
-  static bool needNewString = true;
-  
-  // Prompt the user to enter a string
-  if(needNewString == true)
-  {
-    Serial.println("Please type something and press enter to output as morse code...");
-
-    memset(userInput, 0, sizeof(userInput));
-    needNewString = false;
-  }
-
-  // Retrieve the user input
-  if(Serial.available())
-  {
-    bool hasAllUserInput = getUserInput(userInput);
-  
-    Serial.println("Your user input:");
-    Serial.println(userInput);
-  
-    if(hasAllUserInput)
-    {
-      Serial.println("Now has all user input data!");
-    }
-
-    //digitalWrite(LED_PIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-    //delay(1000);                       // wait for a second
-    //digitalWrite(LED_PIN, LOW);    // turn the LED off by making the voltage LOW
-    //delay(1000);                       // wait for a second
-  
-    if(hasAllUserInput)
-    {
-      needNewString = true;
-    }
-  }
-}
-
-/**
  * Retrieves user input from the serial port
  * 
  * @param userInput The character buffer to store the user input into
  * 
  * @return Flag denoting whether the user string is complete or not
  */
-bool getUserInput(char * userInput)
+bool getUserInput(String & userInput)
 {
   static int charIndex = 0;
   
@@ -119,9 +73,61 @@ bool getUserInput(char * userInput)
       }
     }
 
-    userInput[charIndex] = serialInput;
+    userInput += serialInput;
     charIndex++;
+
+    // Check to see if end of serial buffer has been reached
+    if(charIndex == MAX_SERIAL_BUFFER_SIZE)
+    {
+      break;
+    }
   }
 
   return false;
+}
+
+/**
+ * Runs indefinitely unless a sentinel signal is received
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+void loop()
+{
+  //TODO: Use large char buffer to cap size and improve speed? See old commit
+  static String userInput("");
+  static bool needNewString = true;
+  
+  // Prompt the user to enter a string
+  if(needNewString == true)
+  {
+    Serial.println("Please type something and press enter to output as morse code...");
+
+    userInput = "";
+    needNewString = false;
+  }
+
+  // Retrieve the user input
+  if(Serial.available())
+  {
+    bool hasAllUserInput = getUserInput(userInput);
+
+    if(hasAllUserInput)
+    {
+      Serial.println("Your user input:");
+      Serial.println(userInput);
+      Serial.println("Now has all user input data!");
+    }
+
+    //digitalWrite(LED_PIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+    //delay(1000);                       // wait for a second
+    //digitalWrite(LED_PIN, LOW);    // turn the LED off by making the voltage LOW
+    //delay(1000);                       // wait for a second
+  
+    if(hasAllUserInput)
+    {
+      needNewString = true;
+    }
+  }
 }
