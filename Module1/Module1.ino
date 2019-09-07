@@ -23,43 +23,43 @@ const int INPUT_BUFFER_SIZE = SERIAL_BUFFER_SIZE * 10;
 
 const int MORSE_CODE_TIME_UNIT = 1000;  // Milliseconds
 
-char * MORSE_CODE_CHARS[] = {".-",     // A 
-                             "-...",   // B
-                             "-.-.",   // C
-                             "-..",    // D
-                             ".",      // E
-                             "..-.",   // F
-                             "--.",    // G
-                             "....",   // H
-                             "..",     // I
-                             ".---",   // J
-                             "-.-",    // K
-                             ".-..",   // L
-                             "--",     // M
-                             "-.",     // N
-                             "---",    // O
-                             ".--.",   // P
-                             "--.-",   // Q
-                             ".-.",    // R
-                             "...",    // S
-                             "-",      // T
-                             "..-",    // U
-                             "...-",   // V
-                             ".--",    // W
-                             "-..-",   // X
-                             "-.--",   // Y
-                             "--.."};  // Z
+char * MORSE_CODE_CHAR_SEQUENCE[] = {".-",     // A 
+                                     "-...",   // B
+                                     "-.-.",   // C
+                                     "-..",    // D
+                                     ".",      // E
+                                     "..-.",   // F
+                                     "--.",    // G
+                                     "....",   // H
+                                     "..",     // I
+                                     ".---",   // J
+                                     "-.-",    // K
+                                     ".-..",   // L
+                                     "--",     // M
+                                     "-.",     // N
+                                     "---",    // O
+                                     ".--.",   // P
+                                     "--.-",   // Q
+                                     ".-.",    // R
+                                     "...",    // S
+                                     "-",      // T
+                                     "..-",    // U
+                                     "...-",   // V
+                                     ".--",    // W
+                                     "-..-",   // X
+                                     "-.--",   // Y
+                                     "--.."};  // Z
 
-char * MORSE_CODE_NUMS[] = {"-----",   // 0
-                            ".----",   // 1
-                            "..---",   // 2
-                            "...--",   // 3
-                            "....-",   // 4
-                            ".....",   // 5
-                            "-....",   // 6
-                            "--...",   // 7
-                            "---..",   // 8
-                            "----."};  // 9
+char * MORSE_CODE_NUM_SEQUENCE[] = {"-----",   // 0
+                                    ".----",   // 1
+                                    "..---",   // 2
+                                    "...--",   // 3
+                                    "....-",   // 4
+                                    ".....",   // 5
+                                    "-....",   // 6
+                                    "--...",   // 7
+                                    "---..",   // 8
+                                    "----."};  // 9
 
 /**
  * Initialization that gets run when you press reset or power the board
@@ -71,7 +71,7 @@ char * MORSE_CODE_NUMS[] = {"-----",   // 0
 void setup()
 {
     // Initialize pins
-    pinMode(LED_PIN, OUTPUT);
+    pinMode(OUTPUT_PIN, OUTPUT);
 
     // Setup up the serial connection at 9600 bits per second
     Serial.begin(9600);
@@ -123,7 +123,7 @@ bool getUserInput(char * userInput)
 }
 
 /**
- * Outputs the user input as morse code using the output pin
+ * Outputs the user input as morse code
  * 
  * @param userInput Character buffer storing the user input data
  * 
@@ -142,36 +142,63 @@ void outputMorseCode(char * userInput)
         // Check to see if the character is upper case
         if(userInput[i] >= 'A' && userInput[i] <= 'Z')
         {
-            
+            outputCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'A']);
         }
         // Check to see if the character is lower case
-        else if(userInput[i] >= 'A' && userInput[i] <= 'Z')
+        else if(userInput[i] >= 'a' && userInput[i] <= 'z')
         {
-            
+            outputCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'a']);
         }
         // Check to see if the character is a number
         else if(userInput[i] >= '0' && userInput[i] <= '9')
         {
-            
+            outputCodeSequence(MORSE_CODE_NUM_SEQUENCE[userInput[i] - '0']);
         }
         // Check to see if the character is a space
         else if(userInput[i] == ' ')
         {
-            
+            // NOTE: Delay an additional 4 time units because there is a time
+            //       delay of 7 time units between words and there has already
+            //       been a delay of 3 time units from outputCodeSequence
+            delay(MORSE_CODE_TIME_UNIT * 4);
         }
     }
-    //digitalWrite(OUTPUT_PIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-    //delay(1000);                       // wait for a second
-    //digitalWrite(OUTPUT_PIN, LOW);    // turn the LED off by making the voltage LOW
-    //delay(1000);                       // wait for a second
 }
 
 /**
+ * Outputs the code sequence using the output pin
  * 
+ * @param codeSequence The morse code sequence to be output
+ * 
+ * @return None
  */
-void outputSequence(char * codeSequence)
+void outputCodeSequence(char * codeSequence)
 {
+    int i = 0;
     
+    while(codeSequence[i] != NULL)
+    {
+        int signalDur = MORSE_CODE_TIME_UNIT;
+        
+        if(codeSequence[i] == '-')
+        {
+            signalDur = MORSE_CODE_TIME_UNIT * 3;
+        }
+
+        // Set output pin to high for signal duration
+        digitalWrite(OUTPUT_PIN, HIGH);
+        delay(signalDur);
+
+        // Set output pin to low for time between sequence characters
+        digitalWrite(OUTPUT_PIN, LOW);
+        delay(MORSE_CODE_TIME_UNIT);
+        
+        i++;
+    }
+
+    // NOTE: Delay an additional 2 time units because there is a time
+    //       delay of 3 time units between characters
+    delay(MORSE_CODE_TIME_UNIT * 2);
 }
 
 /**
@@ -219,7 +246,7 @@ void loop()
         {
             needNewString = true;
             
-            outputMorseCode();
+            outputMorseCode(userInput);
             flushSerialBuffer();
         }
     }
