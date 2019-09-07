@@ -3,7 +3,7 @@
   Author: Miles Gapcynski
   Class: EN.605.715.81 - Software Development for Real-Time Systems
 
-  This program displays a user typed string as morse code using an LED.
+  This program displays a user typed string as Morse code using an LED.
   The program will prompt the user for input indefinitely unless a
   sentinel signal is received (e.g. Ctrl+Z).
 */
@@ -78,13 +78,13 @@ void setup()
 }
 
 /**
- * Retrieves user input from the serial port
+ * Retrieves and buffers user input from the serial port
  * 
  * @param userInput Character buffer to store the user input data
  * 
  * @return Flag denoting whether all user input has been retrieved or not
  */
-bool getUserInput(char * userInput)
+bool bufferUserInput(char * userInput)
 {
     static int charIndex = 0;
   
@@ -123,7 +123,7 @@ bool getUserInput(char * userInput)
 }
 
 /**
- * Outputs the user input as morse code
+ * Outputs the user input as Morse code
  * 
  * @param userInput Character buffer storing the user input data
  * 
@@ -142,17 +142,17 @@ void outputMorseCode(char * userInput)
         // Check to see if the character is an upper case letter
         if(userInput[i] >= 'A' && userInput[i] <= 'Z')
         {
-            outputCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'A']);
+            outputMorseCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'A']);
         }
         // Check to see if the character is a lower case letter
         else if(userInput[i] >= 'a' && userInput[i] <= 'z')
         {
-            outputCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'a']);
+            outputMorseCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'a']);
         }
         // Check to see if the character is a number
         else if(userInput[i] >= '0' && userInput[i] <= '9')
         {
-            outputCodeSequence(MORSE_CODE_NUM_SEQUENCE[userInput[i] - '0']);
+            outputMorseCodeSequence(MORSE_CODE_NUM_SEQUENCE[userInput[i] - '0']);
         }
         // Check to see if the character is a space
         else if(userInput[i] == ' ')
@@ -166,13 +166,13 @@ void outputMorseCode(char * userInput)
 }
 
 /**
- * Outputs the code sequence using the output pin
+ * Outputs the Morse code sequence using the output pin
  * 
- * @param codeSequence The morse code sequence to be output
+ * @param codeSequence The Morse code sequence to be output
  * 
  * @return None
  */
-void outputCodeSequence(char * codeSequence)
+void outputMorseCodeSequence(char * codeSequence)
 {
     int i = 0;
     
@@ -231,7 +231,7 @@ void loop()
     // Prompt the user to enter a string
     if(needNewString == true)
     {
-        Serial.println("Please type something to output as morse code (max " + String(INPUT_BUFFER_SIZE) + " characters).");
+        Serial.println("Please type something to output as Morse code (max " + String(INPUT_BUFFER_SIZE) + " characters).");
 
         memset(userInput, 0, sizeof(userInput));
         needNewString = false;
@@ -240,7 +240,7 @@ void loop()
     // Retrieve the user input
     if(Serial.available())
     {
-        bool hasAllUserInput = getUserInput(userInput);
+        bool hasAllUserInput = bufferUserInput(userInput);
 
         if(hasAllUserInput)
         {
