@@ -21,7 +21,7 @@ int SENTINELS[] = {ETX, SUB};
 const int SERIAL_BUFFER_SIZE = 64;
 const int INPUT_BUFFER_SIZE = SERIAL_BUFFER_SIZE * 10;
 
-const int MORSE_CODE_TIME_UNIT = 1000;  // Milliseconds
+const int MORSE_CODE_TIME_UNIT = 500;  // Milliseconds
 
 char * MORSE_CODE_CHAR_SEQUENCE[] = {".-",     // A 
                                      "-...",   // B
@@ -139,12 +139,12 @@ void outputMorseCode(char * userInput)
             return;
         }
 
-        // Check to see if the character is upper case
+        // Check to see if the character is an upper case letter
         if(userInput[i] >= 'A' && userInput[i] <= 'Z')
         {
             outputCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'A']);
         }
-        // Check to see if the character is lower case
+        // Check to see if the character is a lower case letter
         else if(userInput[i] >= 'a' && userInput[i] <= 'z')
         {
             outputCodeSequence(MORSE_CODE_CHAR_SEQUENCE[userInput[i] - 'a']);
