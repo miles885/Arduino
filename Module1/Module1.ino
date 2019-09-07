@@ -108,10 +108,10 @@ bool getUserInput(char * userInput)
         {
             if(serialInput == SENTINELS[i])
             {
-                Serial.println("Received sentinel - ending program!");
+                Serial.println("Received sentinel - ending program! Reset the device to run this program again.");
+                delay(2000);
 
-                //TODO: Need a system.exit(0) or something
-                break;
+                exit(0);
             }
         }
 
