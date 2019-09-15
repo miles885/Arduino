@@ -9,17 +9,22 @@
   host machine at a later time.
 */
 
+#include <EEPROM.h>
+
 /* Constants */
 const int TEMPERATURE_SENSOR_PIN = A0;
 
-/* Timer variables */
-static unsigned int timerCount = 0;
+const int EEPROM_ADDRESS_SIZE = sizeof(int);
 
 /* Temperature variables */
 static bool receivedADCValue = false;
 static bool usingADCValueA = false;
 static int adcValueA = 0;
 static int adcValueB = 0;
+
+/* Counters */
+static unsigned int timerCount = 0;
+static int eepromAddr = EEPROM_ADDRESS_SIZE;
 
 /**
  * Initialization that gets run when you press reset or power the board
@@ -56,11 +61,12 @@ void setup()
     // Create a timer that interrupts at 1 Hz
     // NOTE: Calculate the compare match register using the formula:
     //       cmp = (16,000,000 / (preScaler * interruptFreq)) - 1
-    //       Source: https://www.instructables.com/id/Arduino-Timer-Interrupts/
     //
     //       As such, Arduino Timer1 cannot count at 0.1 Hz (10 seconds) because the
     //       max prescale value is 1024, resulting in a compare value of ‭156,249‬, which
     //       exceeds the max value of 65,536 that the 16 bit Timer1 register can hold
+    //
+    //       Source: https://www.instructables.com/id/Arduino-Timer-Interrupts/
     noInterrupts();
     
     TCCR1A = 0;
@@ -84,7 +90,7 @@ void setup()
  */
 ISR(TIMER1_COMPA_vect)
 {
-    // Check to see if it has been 10 seconds
+    // Check to see if 10 seconds have passed
     if(timerCount == 9)
     {
         // Reset the timer count
@@ -139,6 +145,7 @@ float calcTemperature()
     // NOTE: The TMP36 sensor has a resolution of 10 mV per degree centigrade with a temperature range
     //       of -50C to 125C. The forumla for converting from mV to centigrade is: C = (mV - 500) / 10,
     //       where a 500 mV offset is used to allow for negative temperatures
+    //
     //       Source: https://learn.adafruit.com/tmp36-temperature-sensor/using-a-temp-sensor
     float temperatureC = (temperatureV - 0.5) * 100;
 
@@ -161,8 +168,10 @@ float calcTemperature()
  */
 void loop()
 {
+    static int eepromSizeBytes = EEPROM.length();
+    
     //TODO: Don't read and store values by default? Need "mode" to read values from EEPROM as CSV. Need some kind of switch (digital input)?
-    if(receivedADCValue)
+    if(receivedADCValue && (eepromAddr < eepromSizeBytes))
     {
         // Reset flag denoting whether an ADC value was received or not
         receivedADCValue = false;
@@ -173,7 +182,14 @@ void loop()
         //TODO: Remove
         Serial.print(" | Temperature Fahrenheit: ");
         Serial.println(temperatureF);
+        
+        // Scale the temperature so that it fits inside an integer value (2 bytes instead of 4 bytes)
+        int scaledTemperatureF = (int) (temperatureF * 100.0);
 
-        //TODO: Store value in EEPROM
+        //TODO: Uncomment
+        //EEPROM.put(eepromAddr, scaledTemperatureF);
+        //EEPROM.put(0, eepromAddr / EEPROM_ADDRESS_SIZE);
+
+        eepromAddr += EEPROM_ADDRESS_SIZE;
     }
 }
