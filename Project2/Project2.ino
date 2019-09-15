@@ -13,18 +13,28 @@
 
 /* Constants */
 const int TEMPERATURE_SENSOR_PIN = A0;
+const int WRITE_PIN = 3;
+const int READ_PIN = 2;
 
 const int EEPROM_ADDRESS_SIZE = sizeof(int);
+const float EEPROM_SCALE = 100.0;
 
 /* Temperature variables */
 static bool receivedADCValue = false;
 static bool usingADCValueA = false;
+
 static int adcValueA = 0;
 static int adcValueB = 0;
 
-/* Counters */
+static int currEepromAddr = EEPROM_ADDRESS_SIZE;
+
+/* Interrupt variables */
 static unsigned int timerCount = 0;
-static int eepromAddr = EEPROM_ADDRESS_SIZE;
+
+static bool isWriting = false;
+static bool isReading = false;
+
+static bool resetProgramState = false;
 
 /**
  * Initialization that gets run when you press reset or power the board
@@ -35,12 +45,16 @@ static int eepromAddr = EEPROM_ADDRESS_SIZE;
  */
 void setup()
 {
+    // Initialize pins
+    pinMode(WRITE_PIN, INPUT);
+    pinMode(READ_PIN, INPUT);
+    
     // Setup up the serial connection at 9600 bits per second
     Serial.begin(9600);
 
-    // --------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------
     // Timer Terminology
-    // --------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------
     // TCCRx  - Timer/Counter Control Register used to configure prescaler
     // TCNTx  - Timer/Counter Register used to store timer value
     // OCRx   - Output Compare Register
@@ -58,7 +72,7 @@ void setup()
     // Source: http://www.electronoobs.com/eng_arduino_tut12.php and
     //         http://ww1.microchip.com/downloads/en/DeviceDoc/ATmega48A-PA-88A-PA-168A-PA-328-P-DS-DS40002061A.pdf
 
-    // Create a timer that interrupts at 1 Hz
+    // Configure TIMER1 to interrupt at 1 Hz
     // NOTE: Calculate the compare match register using the formula:
     //       cmp = (16,000,000 / (preScaler * interruptFreq)) - 1
     //
@@ -77,12 +91,16 @@ void setup()
     TCCR1B |= (1 << CS12) | (1 << CS10);  // 0x5 = 1024 prescaler
     TIMSK1 |= (1 << OCIE1A);  // Enable compare interrupt
 
+    // Attach read and write pins to interrupts triggered by a rising edge
+    attachInterrupt(digitalPinToInterrupt(WRITE_PIN), writePinISR, RISING);
+    attachInterrupt(digitalPinToInterrupt(READ_PIN), readPinISR, RISING);
+    
     interrupts();
 }
 
 /**
  * Interrupt service routine that reads the ADC value from the sensor pin
- * NOTE: This ISR is called at 1 Hz by a timer
+ * NOTE: This ISR is called at 1 Hz by TIMER1
  * 
  * @param None
  * 
@@ -118,28 +136,79 @@ ISR(TIMER1_COMPA_vect)
 }
 
 /**
- * Calculate the temperature (Fahrenheit) from the ADC value
+ * Interrupt service routine that reads the input pin for the write switch
  * 
  * @param None
  * 
- * @return temperatureF The temperature in Fahrenheit
+ * @return None
  */
-float calcTemperature()
+ void writePinISR()
+ {
+    //TODO: Remove
+    Serial.println("WRITING WENT HIGH");
+
+    isWriting = true;
+    isReading = false;
+    
+    resetProgramState = true;
+ }
+
+/**
+ * Interrupt service routine that reads the input pin for the read switch
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+void readPinISR()
 {
+    //TODO: Remove
+    Serial.println("READING WENT HIGH");
+
+    isWriting = false;
+    isReading = true;
+    
+    resetProgramState = true;
+}
+
+/**
+ * Resets the program state
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+void resetProgram()
+{
+    receivedADCValue = false;
+    usingADCValueA = false;
+    adcValueA = 0;
+    adcValueB = 0;
+    
+    currEepromAddr = EEPROM_ADDRESS_SIZE;
+
+    timerCount = 0;
+}
+
+/**
+ * Calculates the temperature (Fahrenheit) from the ADC value, and then
+ * stores the temperature in EEPROM so it can be read at a later time.
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+float calcAndStoreTemperature()
+{
+    /******************************************************************************************
+     * Calculate temperature
+     ******************************************************************************************/
     // Copy the most recent ADC value
     int adcValue = usingADCValueA ? adcValueA : adcValueB;
-
-    //TODO: Remove
-    Serial.print("ADC value: ");
-    Serial.print(adcValue);
 
     // Convert temperature value to voltage
     // NOTE: The Arduino UNO ADC pins are 10 bits in size, thus the ADC value range is 0-1023
     float temperatureV = (adcValue / 1024.0) * 5.0;
-
-    //TODO: Remove
-    Serial.print(" | Temperature voltage: ");
-    Serial.print(temperatureV);
 
     // Convert temperature voltage to Celcius
     // NOTE: The TMP36 sensor has a resolution of 10 mV per degree centigrade with a temperature range
@@ -149,14 +218,64 @@ float calcTemperature()
     //       Source: https://learn.adafruit.com/tmp36-temperature-sensor/using-a-temp-sensor
     float temperatureC = (temperatureV - 0.5) * 100;
 
-    //TODO: Remove
-    Serial.print(" | Temperature Celcius: ");
-    Serial.print(temperatureC);
-
     // Convert Celcius to Fahrenheit
     float temperatureF = (temperatureC * 9.0 / 5.0) + 32.0;
 
-    return temperatureF;
+    //TODO: Remove
+    Serial.print("Temperature: ");
+    Serial.print(temperatureF);
+
+    Serial.print(" | at address: ");
+    Serial.print(currEepromAddr);
+
+    Serial.print(" | count: ");
+    Serial.println(currEepromAddr / EEPROM_ADDRESS_SIZE);
+
+    /******************************************************************************************
+     * Store temperature
+     ******************************************************************************************/
+    // Scale the temperature so that it fits inside an integer value (2 bytes instead of 4 bytes)
+    int scaledTemperatureF = (int) (temperatureF * EEPROM_SCALE);
+
+    // Store the scaled temperature in EEPROM
+    EEPROM.put(currEepromAddr, scaledTemperatureF);
+    EEPROM.put(0, currEepromAddr / EEPROM_ADDRESS_SIZE);
+
+    currEepromAddr += EEPROM_ADDRESS_SIZE;
+}
+
+/**
+ * Writes the temperature values stored in EEPROM to Serial
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+void writeTemperaturesToSerial()
+{
+    int numTemperatureValues = 0;
+
+    EEPROM.get(0, numTemperatureValues);
+
+    //TODO: Remove
+    Serial.println(numTemperatureValues);
+
+    int numEepromBytesToRead = numTemperatureValues * EEPROM_ADDRESS_SIZE;
+
+    for(int i = EEPROM_ADDRESS_SIZE; i < (numEepromBytesToRead + EEPROM_ADDRESS_SIZE); i += EEPROM_ADDRESS_SIZE)
+    {
+        // Retrieve the EEPROM value
+        int eepromValue = 0;
+
+        EEPROM.get(i, eepromValue);
+
+        // Scale the temperature so it's a floating number again
+        float temperatureF = ((float) eepromValue) / EEPROM_SCALE;
+
+        // Write the EEPROM value as a CSV
+        Serial.print(temperatureF);
+        Serial.print(",");
+    }
 }
 
 /**
@@ -169,27 +288,35 @@ float calcTemperature()
 void loop()
 {
     static int eepromSizeBytes = EEPROM.length();
+
+    // Check to see if the program state needs to be reset
+    if(resetProgramState)
+    {
+        resetProgramState = false;
+
+        /* Begin Critical Section */
+        noInterrupts();
+        
+        resetProgram();
+
+        interrupts();
+        /* End Critical Section */
+    }
     
-    //TODO: Don't read and store values by default? Need "mode" to read values from EEPROM as CSV. Need some kind of switch (digital input)?
-    if(receivedADCValue && (eepromAddr < eepromSizeBytes))
+    // Check to see if in writing mode, have received a temperature value, and the EEPROM is not full
+    if(isWriting && receivedADCValue && (currEepromAddr < eepromSizeBytes))
     {
         // Reset flag denoting whether an ADC value was received or not
         receivedADCValue = false;
 
-        // Calculate the temperature (Fahrenheit)
-        float temperatureF = calcTemperature();
-
-        //TODO: Remove
-        Serial.print(" | Temperature Fahrenheit: ");
-        Serial.println(temperatureF);
+        // Calculate and store the temperature in EEPROM
+        calcAndStoreTemperature();
+    }
+    // Check to see if in reading mode
+    else if(isReading)
+    {
+        isReading = false;
         
-        // Scale the temperature so that it fits inside an integer value (2 bytes instead of 4 bytes)
-        int scaledTemperatureF = (int) (temperatureF * 100.0);
-
-        //TODO: Uncomment
-        //EEPROM.put(eepromAddr, scaledTemperatureF);
-        //EEPROM.put(0, eepromAddr / EEPROM_ADDRESS_SIZE);
-
-        eepromAddr += EEPROM_ADDRESS_SIZE;
+        writeTemperaturesToSerial();
     }
 }
