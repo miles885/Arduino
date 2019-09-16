@@ -144,9 +144,6 @@ ISR(TIMER1_COMPA_vect)
  */
  void writePinISR()
  {
-    //TODO: Remove
-    Serial.println("WRITING WENT HIGH");
-
     isWriting = true;
     isReading = false;
     
@@ -162,9 +159,6 @@ ISR(TIMER1_COMPA_vect)
  */
 void readPinISR()
 {
-    //TODO: Remove
-    Serial.println("READING WENT HIGH");
-
     isWriting = false;
     isReading = true;
     
@@ -292,6 +286,8 @@ void loop()
     // Check to see if the program state needs to be reset
     if(resetProgramState)
     {
+        Serial.println("Resetting program state");
+        
         resetProgramState = false;
 
         /* Begin Critical Section */
@@ -302,9 +298,8 @@ void loop()
         interrupts();
         /* End Critical Section */
     }
-    
     // Check to see if in writing mode, have received a temperature value, and the EEPROM is not full
-    if(isWriting && receivedADCValue && (currEepromAddr < eepromSizeBytes))
+    else if(isWriting && receivedADCValue && (currEepromAddr < eepromSizeBytes))
     {
         // Reset flag denoting whether an ADC value was received or not
         receivedADCValue = false;
