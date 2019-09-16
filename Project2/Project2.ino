@@ -19,6 +19,8 @@ const int READ_PIN = 2;
 const int EEPROM_ADDRESS_SIZE = sizeof(int);
 const float EEPROM_SCALE = 100.0;
 
+const long INTERRUPT_TIME_THRESHOLD = 250;  // Milliseconds
+
 /* Temperature variables */
 static bool receivedADCValue = false;
 static bool usingADCValueA = false;
@@ -144,10 +146,20 @@ ISR(TIMER1_COMPA_vect)
  */
  void writePinISR()
  {
-    isWriting = true;
-    isReading = false;
-    
-    resetProgramState = true;
+    // Retrieve the current time in milliseconds
+    static unsigned long lastInterruptTime = 0;
+    unsigned long currTime = millis();
+
+    // Check to see if enough time has passed since the last interrupt (debounce)
+    if((currTime - lastInterruptTime) > INTERRUPT_TIME_THRESHOLD)
+    { 
+        isWriting = true;
+        isReading = false;
+        
+        resetProgramState = true;
+
+        lastInterruptTime = currTime;
+    }
  }
 
 /**
@@ -159,10 +171,20 @@ ISR(TIMER1_COMPA_vect)
  */
 void readPinISR()
 {
-    isWriting = false;
-    isReading = true;
-    
-    resetProgramState = true;
+    // Retrieve the current time in milliseconds
+    static unsigned long lastInterruptTime = 0;
+    unsigned long currTime = millis();
+
+    // Check to see if enough time has passed since the last interrupt (debounce)
+    if((currTime - lastInterruptTime) > INTERRUPT_TIME_THRESHOLD)
+    { 
+        isWriting = false;
+        isReading = true;
+        
+        resetProgramState = true;
+
+        lastInterruptTime = currTime;
+    }
 }
 
 /**
@@ -215,16 +237,6 @@ float calcAndStoreTemperature()
     // Convert Celcius to Fahrenheit
     float temperatureF = (temperatureC * 9.0 / 5.0) + 32.0;
 
-    //TODO: Remove
-    Serial.print("Temperature: ");
-    Serial.print(temperatureF);
-
-    Serial.print(" | at address: ");
-    Serial.print(currEepromAddr);
-
-    Serial.print(" | count: ");
-    Serial.println(currEepromAddr / EEPROM_ADDRESS_SIZE);
-
     /******************************************************************************************
      * Store temperature
      ******************************************************************************************/
@@ -247,28 +259,27 @@ float calcAndStoreTemperature()
  */
 void writeTemperaturesToSerial()
 {
+    Serial.println("Time,Temperature");
+    
     int numTemperatureValues = 0;
-
     EEPROM.get(0, numTemperatureValues);
 
-    //TODO: Remove
-    Serial.println(numTemperatureValues);
-
-    int numEepromBytesToRead = numTemperatureValues * EEPROM_ADDRESS_SIZE;
-
-    for(int i = EEPROM_ADDRESS_SIZE; i < (numEepromBytesToRead + EEPROM_ADDRESS_SIZE); i += EEPROM_ADDRESS_SIZE)
+    for(int i = 0; i < numTemperatureValues; i++)
     {
+        // Calculate the EEPROM address
+        int eepromAddr = (i + 1) * EEPROM_ADDRESS_SIZE;
+        
         // Retrieve the EEPROM value
         int eepromValue = 0;
+        EEPROM.get(eepromAddr, eepromValue);
 
-        EEPROM.get(i, eepromValue);
-
-        // Scale the temperature so it's a floating number again
+        // Scale the temperature so it's a floating point number again
         float temperatureF = ((float) eepromValue) / EEPROM_SCALE;
 
-        // Write the EEPROM value as a CSV
-        Serial.print(temperatureF);
+        // Write the time and temperature as CSV
+        Serial.print(i * 10);
         Serial.print(",");
+        Serial.println(temperatureF);
     }
 }
 
@@ -286,8 +297,6 @@ void loop()
     // Check to see if the program state needs to be reset
     if(resetProgramState)
     {
-        Serial.println("Resetting program state");
-        
         resetProgramState = false;
 
         /* Begin Critical Section */
