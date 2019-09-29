@@ -20,7 +20,7 @@ const unsigned int RPM_READ_PERIOD = 1000;  // ms
 
 /* Global variables */
 volatile int ledStatus;
-unsigned int rpmCounter;
+volatile unsigned int rpmCounter;
 
 /**
  * Initialization that gets run when you press reset or power the board
@@ -77,21 +77,17 @@ void irRecvISR()
  */
 void loop()
 {
-    //TODO: Fix ISR triggering at startup (does VCC cause pin to go high at board startup, and then when IR Emitter starts transmitting it goes low?
-    //TODO: Fix LED status light blinking when it shouldn't - need higher pull up resistor? Check school discussion thread
-
-    // Source: http://arduinoprojects101.com/arduino-rpm-counter-tachometer/
-
     static unsigned long prevPotTime = 0;
     static unsigned long prevRPMTime = 0;
-
-    noInterrupts();
 
     unsigned long currTime = millis();
 
     // Check to see if the potentiometer value should be checked
     if((currTime - prevPotTime) >= POT_READ_PERIOD)
     {
+        // Begin critical section
+        noInterrupts();
+        
         // Read the potentiometer value (10 bits) and map it to the PWM range (8 bits)
         int pinValue = analogRead(POT_PIN);
         int motorDutyValue = map(pinValue, 0, 1023, 0, 255);
@@ -101,11 +97,17 @@ void loop()
 
         // Update POT time
         prevPotTime = currTime;
+
+        // End critical section
+        interrupts();
     }
 
     // Check to see if the RPM value should be calculated and transmitted
     if(currTime - prevRPMTime >= RPM_READ_PERIOD)
     {
+        // Begin critical section
+        noInterrupts();
+        
         // Multiply by 30 instead of 60 because the propeller will trigger the interrupt twice per revolution
         unsigned int currRPM = 30 * rpmCounter * (1000 / (currTime - prevRPMTime));
 
@@ -114,7 +116,8 @@ void loop()
         // Reset RPM counter and update RPM time
         rpmCounter = 0;
         prevRPMTime = currTime;
-    }
 
-    interrupts();
+        // End critical section
+        interrupts();
+    }
 }
