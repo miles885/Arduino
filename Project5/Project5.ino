@@ -3,7 +3,8 @@
   Author: Miles Gapcynski
   Class: EN.605.715.81 - Software Development for Real-Time Systems
 
-  This program measures the tempature and humidity and displays it on an OLED screen.
+  This program measures the tempature and humidity using a DHT11
+  sensor and displays the readings on an OLED screen.
 */
 
 #include <DHTesp.h>       // Temperature and humidity sensor
@@ -13,7 +14,10 @@
 const int DISPLAY_ADDRESS = 0x3C;
 const int DISPLAY_SDA_PIN = D3;
 const int DISPLAY_SCL_PIN = D4;
+
 const int DHT_DAT_PIN = D6;
+
+const int DHT_READ_PERIOD = 1000;  // ms
 
 /* Global variables */
 DHTesp dht;
@@ -36,9 +40,6 @@ void setup()
 
     // Setup the OLED display
     ledDisp.init();
-    ledDisp.clear();
-    ledDisp.display();
-
     ledDisp.setFont(ArialMT_Plain_10);
     ledDisp.setTextAlignment(TEXT_ALIGN_CENTER);
 }
@@ -57,7 +58,7 @@ void loop()
     float temperatureC = dht.getTemperature();
     float temperatureF = (temperatureC * 9.0 / 5.0) + 32.0;
 
-    // Check to make sure the sensor was able to read the humidity and temperature
+    // Check to make sure the DHT sensor was able to read the humidity and temperature
     if(!isnan(humidity) && !isnan(temperatureF))
     {
         ledDisp.clear();
@@ -68,5 +69,5 @@ void loop()
         ledDisp.display();
     }
 
-    delay(500);
+    delay(DHT_READ_PERIOD);
 }
