@@ -13,9 +13,19 @@
 #include <utility/imumaths.h>
 
 /* Constants */
-const int SENSOR_SAMPLE_DELAY = 100;
+const bool CALIBRATING_BNO = false;
+
+const float RAD_TO_DEG = 57.2958;  // 57.2958 = 180 / pi
+const int BNO_SAMPLE_RATE = 100;  // ms
+
+const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-19, -32, -35,  // Acceleration
+                                                  -10, 171, -70,  // Magnetometer
+                                                  -1, 0, 0,       // Gyroscope
+                                                  1000,           // Acceleration radius
+                                                  805};           // Magnetometer radius
 
 /* Global variables */
+//TODO: BNO055_ID, BNO055_ADDRESS_A
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
 
 /**
@@ -27,19 +37,119 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
  */
 void setup()
 {
-    // Setup up the serial connection at 9600 bits per second
-    Serial.begin(9600);
+    // Setup up the serial connection at 115200 bits per second
+    Serial.begin(115200);
+    delay(1000);
 
-    // Initialise the BNO055 sensor
-    if(!bno.begin())
+    // Initialize the BNO055 sensor
+    if(!bno.begin(Adafruit_BNO055::OPERATION_MODE_NDOF))
     {
         Serial.print("No BNO055 detected... check your wiring or I2C address!");
         while(1);
     }
 
+    // Set calibration data
+    if(!CALIBRATING_BNO)
+    {
+        bno.setSensorOffsets(SENSOR_OFFSETS);
+    }
+
     delay(1000);
 
     bno.setExtCrystalUse(true);
+
+    // Check calibration status
+    sensors_event_t event;
+
+    if(!CALIBRATING_BNO)
+    {
+        Serial.println("Wave sensor around to calibrate magnetometers");
+
+        while(!bno.isFullyCalibrated())
+        {
+            bno.getEvent(&event);
+            
+            delay(BNO_SAMPLE_RATE);
+        }
+    }
+    else
+    {
+        Serial.println("Please calibrate the sensor:");
+        Serial.println("- Gyroscope: Sensor must start at rest");
+        Serial.println("- Magnetometer: Wave sensor around");
+        Serial.println("- Accelerometer: Place sensor in +X,-X,+Y,-Y,+Z,-Z orientations");
+
+        while(!bno.isFullyCalibrated())
+        {
+            bno.getEvent(&event);
+            
+            getCalData();
+
+            delay(BNO_SAMPLE_RATE);
+        }
+    }
+}
+
+/**
+ * Prints calibration status and sensor offsets
+ * when sensor is fully calibrated
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+void getCalData()
+{
+    uint8_t system, gyro, accel, mag;
+    bno.getCalibration(&system, &gyro, &accel, &mag);
+
+    Serial.print("System: ");
+    Serial.print(system);
+    Serial.print("\tGyro: ");
+    Serial.print(gyro);
+    Serial.print("\tAccel: ");
+    Serial.print(accel);
+    Serial.print("\tMag: ");
+    Serial.print(mag);
+    Serial.println("");
+
+    adafruit_bno055_offsets_t sensorOffsets;
+    bool calStatus = bno.getSensorOffsets(sensorOffsets);
+
+    if(calStatus)
+    {
+        Serial.print("Accel offset: ");
+        Serial.print(sensorOffsets.accel_offset_x);
+        Serial.print(" | ");
+        Serial.print(sensorOffsets.accel_offset_y);
+        Serial.print(" | ");
+        Serial.print(sensorOffsets.accel_offset_z);
+        Serial.println("");
+    
+        Serial.print("Mag offset: ");
+        Serial.print(sensorOffsets.mag_offset_x);
+        Serial.print(" | ");
+        Serial.print(sensorOffsets.mag_offset_y);
+        Serial.print(" | ");
+        Serial.print(sensorOffsets.mag_offset_z);
+        Serial.println("");
+    
+        Serial.print("Gyro offset: ");
+        Serial.print(sensorOffsets.gyro_offset_x);
+        Serial.print(" | ");
+        Serial.print(sensorOffsets.gyro_offset_y);
+        Serial.print(" | ");
+        Serial.print(sensorOffsets.gyro_offset_z);
+        Serial.println("");
+    
+        Serial.print("Accel radius: ");
+        Serial.print(sensorOffsets.accel_radius);
+        Serial.println("");
+    
+        Serial.print("Mag radius: ");
+        Serial.print(sensorOffsets.mag_radius);
+        Serial.println("");
+    }
 }
 
 /**
@@ -51,23 +161,30 @@ void setup()
  */
 void loop()
 {
-    //TODO: Check calibration here? 0=uncalibrated, 3=fully calibrated
-    
-    // Get a new sensor event
-    sensors_event_t event;
-    bno.getEvent(&event);
+    // Retrieve quaternion
+    imu::Quaternion quat = bno.getQuat();
 
-    // Display orientation data
-    //TODO: Retrieve quaternion and calculate RPY
-    Serial.print("X: ");
-    Serial.print(event.orientation.x, 4);
-    Serial.print("\tY: ");
-    Serial.print(event.orientation.y, 4);
-    Serial.print("\tZ: ");
-    Serial.print(event.orientation.z, 4);
+    float w = quat.w();
+    float x = quat.x();
+    float y = quat.y();
+    float z = quat.z();
+
+    // Calculate RPY
+    float roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+    float pitch = asin(2.0 * w * y - x * z);
+    float yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+
+    float rollDeg = roll * RAD_TO_DEG;
+    float pitchDeg = pitch * RAD_TO_DEG;
+    float yawDeg = yaw * RAD_TO_DEG;
+
+    // Transmit RPY over serial (USB)
+    Serial.print(rollDeg);
+    Serial.print(",");
+    Serial.print(pitchDeg);
+    Serial.print(",");
+    Serial.print(yawDeg);
     Serial.println("");
-
-    //TODO: Transmit RPY over serial (USB)
-
-    delay(SENSOR_SAMPLE_DELAY);
+    
+    delay(BNO_SAMPLE_RATE);
 }
