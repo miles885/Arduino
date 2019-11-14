@@ -16,7 +16,7 @@
 /* Constants */
 const bool CALIBRATING_BNO = false;
 
-const int BNO_SAMPLE_RATE = 100;  // ms
+const int BNO_TICK_DELAY = 7;  // 7 * 15 ms per tick = 105 ms
 
 const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-19, -32, -35,  // Acceleration
                                                   -10, 171, -70,  // Magnetometer
@@ -98,7 +98,7 @@ void TaskReadIMU(void * pvParameters)
         Serial.print(yawDeg);
         Serial.println("");
         
-        delay(BNO_SAMPLE_RATE);
+        vTaskDelay(BNO_TICK_DELAY);
     }
 }
 
@@ -124,7 +124,7 @@ void initBNOSensor(Adafruit_BNO055 & bno)
         bno.setSensorOffsets(SENSOR_OFFSETS);
     }
 
-    delay(1000);
+    vTaskDelay(67);  // 67 ticks * 15 ms/tick = 1005 ms
 
     bno.setExtCrystalUse(true);
 
@@ -139,7 +139,7 @@ void initBNOSensor(Adafruit_BNO055 & bno)
         {
             bno.getEvent(&event);
             
-            delay(BNO_SAMPLE_RATE);
+            vTaskDelay(BNO_TICK_DELAY);
         }
     }
     else
@@ -155,7 +155,7 @@ void initBNOSensor(Adafruit_BNO055 & bno)
             
             getCalData(bno);
 
-            delay(BNO_SAMPLE_RATE);
+            vTaskDelay(BNO_TICK_DELAY);
         }
     }
 }
