@@ -72,43 +72,23 @@ void TaskReadIMU(void * pvParameters)
 
     while(true)
     {
-        // Retrieve quaternion
-        imu::Quaternion quat = bno.getQuat();
-    
-        float w = quat.w();
-        float x = quat.x();
-        float y = quat.y();
-        float z = quat.z();
+        // Retrieve RPY
+        sensors_event_t event;
+        bno.getEvent(&event);
 
-        //TODO: Remove
-        Serial.print(quat.w());
-        Serial.print(",");
-        Serial.print(quat.x());
-        Serial.print(",");
-        Serial.print(quat.y());
-        Serial.print(",");
-        Serial.print(quat.z());
-        Serial.println("");
-        
-        // Calculate RPY
-        float roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
-        float pitch = -asin(2.0 * w * y - x * z);
-        float yaw = -atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
-        
-        float rollDeg = roll * RAD_TO_DEG;
-        float pitchDeg = pitch * RAD_TO_DEG;
-        float yawDeg = yaw * RAD_TO_DEG;
+        float roll = -event.orientation.z;
+        float pitch = event.orientation.y;
+        float yaw = map(event.orientation.x, 0.0, 360.0, -180.0, 180.0);
     
         // Transmit RPY over serial (USB)
         //TODO: Replace Serial with Wire library when using I2C. Will use callbacks to respond to requests from RPi
         //TODO: Place RPY in ping pong buffer for I2C callback?
-        Serial.print(rollDeg);
+        Serial.print(roll);
         Serial.print(",");
-        Serial.print(pitchDeg);
+        Serial.print(pitch);
         Serial.print(",");
-        Serial.print(yawDeg);
+        Serial.print(yaw);
         Serial.println("");
-        Serial.println("");  //TODO: Remove
 
         vTaskDelay(BNO_TICK_DELAY);
     }
