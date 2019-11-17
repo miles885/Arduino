@@ -18,11 +18,11 @@ const bool CALIBRATING_BNO = false;
 
 const int BNO_TICK_DELAY = 7;  // 7 * 15 ms per tick = 105 ms
 
-const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-19, -32, -35,  // Acceleration
-                                                  -10, 171, -70,  // Magnetometer
-                                                  -1, 0, 0,       // Gyroscope
-                                                  1000,           // Acceleration radius
-                                                  805};           // Magnetometer radius
+const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-2, -41, -27,    // Acceleration
+                                                  -28, 162, -106,  // Magnetometer
+                                                  0, 0, 0,         // Gyroscope
+                                                  1000,            // Acceleration radius
+                                                  853};            // Magnetometer radius
 
 /* Global variables */
 
@@ -79,25 +79,37 @@ void TaskReadIMU(void * pvParameters)
         float x = quat.x();
         float y = quat.y();
         float z = quat.z();
-    
+
+        //TODO: Remove
+        Serial.print(quat.w());
+        Serial.print(",");
+        Serial.print(quat.x());
+        Serial.print(",");
+        Serial.print(quat.y());
+        Serial.print(",");
+        Serial.print(quat.z());
+        Serial.println("");
+        
         // Calculate RPY
         float roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
-        float pitch = asin(2.0 * w * y - x * z);
-        float yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
-    
+        float pitch = -asin(2.0 * w * y - x * z);
+        float yaw = -atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+        
         float rollDeg = roll * RAD_TO_DEG;
         float pitchDeg = pitch * RAD_TO_DEG;
         float yawDeg = yaw * RAD_TO_DEG;
     
         // Transmit RPY over serial (USB)
-        //TODO: Replace Serial with Wire library when using I2C (probably need separate task to handle I2C requests too)
+        //TODO: Replace Serial with Wire library when using I2C. Will use callbacks to respond to requests from RPi
+        //TODO: Place RPY in ping pong buffer for I2C callback?
         Serial.print(rollDeg);
         Serial.print(",");
         Serial.print(pitchDeg);
         Serial.print(",");
         Serial.print(yawDeg);
         Serial.println("");
-        
+        Serial.println("");  //TODO: Remove
+
         vTaskDelay(BNO_TICK_DELAY);
     }
 }
@@ -153,22 +165,25 @@ void initBNOSensor(Adafruit_BNO055 & bno)
         {
             bno.getEvent(&event);
             
-            getCalData(bno);
+            getCalStatus(bno);
 
             vTaskDelay(BNO_TICK_DELAY);
         }
+
+        getSensorOffsets(bno);
     }
+
+    Serial.println("Calibration complete!");
 }
 
 /**
- * Prints calibration status and sensor offsets
- * when sensor is fully calibrated
+ * Retrieves and prints the calibration status
  * 
  * @param bno The BNO055 sensor object
  * 
  * @return None
  */
-void getCalData(Adafruit_BNO055 & bno)
+void getCalStatus(Adafruit_BNO055 & bno)
 {
     uint8_t system, gyro, accel, mag;
     bno.getCalibration(&system, &gyro, &accel, &mag);
@@ -182,42 +197,49 @@ void getCalData(Adafruit_BNO055 & bno)
     Serial.print("\tMag: ");
     Serial.print(mag);
     Serial.println("");
+}
 
+/**
+ * Retrieves and prints the sensor offsets for calibration purposes
+ * 
+ * @param bno The BNO055 sensor object
+ * 
+ * @return None
+ */
+void getSensorOffsets(Adafruit_BNO055 & bno)
+{
     adafruit_bno055_offsets_t sensorOffsets;
-    bool calStatus = bno.getSensorOffsets(sensorOffsets);
+    bno.getSensorOffsets(sensorOffsets);
 
-    if(calStatus)
-    {
-        Serial.print("Accel offset: ");
-        Serial.print(sensorOffsets.accel_offset_x);
-        Serial.print(" | ");
-        Serial.print(sensorOffsets.accel_offset_y);
-        Serial.print(" | ");
-        Serial.print(sensorOffsets.accel_offset_z);
-        Serial.println("");
-    
-        Serial.print("Mag offset: ");
-        Serial.print(sensorOffsets.mag_offset_x);
-        Serial.print(" | ");
-        Serial.print(sensorOffsets.mag_offset_y);
-        Serial.print(" | ");
-        Serial.print(sensorOffsets.mag_offset_z);
-        Serial.println("");
-    
-        Serial.print("Gyro offset: ");
-        Serial.print(sensorOffsets.gyro_offset_x);
-        Serial.print(" | ");
-        Serial.print(sensorOffsets.gyro_offset_y);
-        Serial.print(" | ");
-        Serial.print(sensorOffsets.gyro_offset_z);
-        Serial.println("");
-    
-        Serial.print("Accel radius: ");
-        Serial.print(sensorOffsets.accel_radius);
-        Serial.println("");
-    
-        Serial.print("Mag radius: ");
-        Serial.print(sensorOffsets.mag_radius);
-        Serial.println("");
-    }
+    Serial.print("Accel offset: ");
+    Serial.print(sensorOffsets.accel_offset_x);
+    Serial.print(" | ");
+    Serial.print(sensorOffsets.accel_offset_y);
+    Serial.print(" | ");
+    Serial.print(sensorOffsets.accel_offset_z);
+    Serial.println("");
+
+    Serial.print("Mag offset: ");
+    Serial.print(sensorOffsets.mag_offset_x);
+    Serial.print(" | ");
+    Serial.print(sensorOffsets.mag_offset_y);
+    Serial.print(" | ");
+    Serial.print(sensorOffsets.mag_offset_z);
+    Serial.println("");
+
+    Serial.print("Gyro offset: ");
+    Serial.print(sensorOffsets.gyro_offset_x);
+    Serial.print(" | ");
+    Serial.print(sensorOffsets.gyro_offset_y);
+    Serial.print(" | ");
+    Serial.print(sensorOffsets.gyro_offset_z);
+    Serial.println("");
+
+    Serial.print("Accel radius: ");
+    Serial.print(sensorOffsets.accel_radius);
+    Serial.println("");
+
+    Serial.print("Mag radius: ");
+    Serial.print(sensorOffsets.mag_radius);
+    Serial.println("");
 }
