@@ -13,9 +13,17 @@
 #include <utility/imumaths.h>
 #include <Wire.h>
 
-/* Constants */
-const bool CALIBRATING_BNO = false;
+union FloatToBytes
+{
+    float value;
+    byte bytes[4];
+};
 
+/* Constants */
+const int I2C_SLAVE_ADDRESS = 0x05;
+const int I2C_DATA_SIZE = 12;
+
+const bool CALIBRATING_BNO = false;
 const int BNO_TICK_DELAY = 7;  // 7 * 15 ms per tick = 105 ms
 
 const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-2, -41, -27,    // Acceleration
@@ -25,6 +33,7 @@ const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-2, -41, -27,    // Accelerati
                                                   853};            // Magnetometer radius
 
 /* Global variables */
+byte rpyBuffer[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /**
  * Initialization that gets run when you press reset or power the board
@@ -35,8 +44,12 @@ const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-2, -41, -27,    // Accelerati
  */
 void setup()
 {
-    // Setup up the serial connection at 115200 bits per second
+    // Setup up serial and I2C
     Serial.begin(115200);
+
+    Wire.begin(I2C_SLAVE_ADDRESS);
+    Wire.onRequest(sendRPY);
+    
     delay(1000);
 
     // Create tasks
@@ -56,6 +69,19 @@ void loop()
 }
 
 /**
+ * I2C request callback that sends roll, pitch, and yaw data
+ * to the I2C master as a byte array
+ * 
+ * @param None
+ * 
+ * @return None
+ */
+void sendRPY()
+{
+    Wire.write(rpyBuffer, I2C_DATA_SIZE);
+}
+
+/**
  * Task entry point for configuring the BNO055 sensor, reading
  * data off the sensor, and transmitting roll, pitch, yaw over serial
  * 
@@ -65,7 +91,6 @@ void loop()
  */
 void TaskReadIMU(void * pvParameters)
 {
-    //TODO: BNO055_ID, BNO055_ADDRESS_A
     Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
     
     initBNOSensor(bno);
@@ -76,19 +101,27 @@ void TaskReadIMU(void * pvParameters)
         sensors_event_t event;
         bno.getEvent(&event);
 
-        float roll = -event.orientation.z;
-        float pitch = event.orientation.y;
-        float yaw = map(event.orientation.x, 0.0, 360.0, -180.0, 180.0);
-    
-        // Transmit RPY over serial (USB)
-        //TODO: Replace Serial with Wire library when using I2C. Will use callbacks to respond to requests from RPi
-        //TODO: Place RPY in ping pong buffer for I2C callback?
-        Serial.print(roll);
-        Serial.print(",");
-        Serial.print(pitch);
-        Serial.print(",");
-        Serial.print(yaw);
-        Serial.println("");
+        FloatToBytes roll;
+        FloatToBytes pitch;
+        FloatToBytes yaw;
+
+        roll.value = -event.orientation.z;
+        pitch.value = event.orientation.y;
+        yaw.value = map(event.orientation.x, 0.0, 360.0, -180.0, 180.0);
+
+        // Store RPY in a byte buffer
+        rpyBuffer[0] = roll.bytes[0];
+        rpyBuffer[1] = roll.bytes[1];
+        rpyBuffer[2] = roll.bytes[2];
+        rpyBuffer[3] = roll.bytes[3];
+        rpyBuffer[4] = pitch.bytes[0];
+        rpyBuffer[5] = pitch.bytes[1];
+        rpyBuffer[6] = pitch.bytes[2];
+        rpyBuffer[7] = pitch.bytes[3];
+        rpyBuffer[8] = yaw.bytes[0];
+        rpyBuffer[9] = yaw.bytes[1];
+        rpyBuffer[10] = yaw.bytes[2];
+        rpyBuffer[11] = yaw.bytes[3];
 
         vTaskDelay(BNO_TICK_DELAY);
     }
