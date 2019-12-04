@@ -33,6 +33,7 @@ const adafruit_bno055_offsets_t SENSOR_OFFSETS = {-2, -41, -27,    // Accelerati
                                                   853};            // Magnetometer radius
 
 /* Global variables */
+volatile bool readIMU = false;
 byte rpyBuffer[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /**
@@ -48,6 +49,7 @@ void setup()
     Serial.begin(115200);
 
     Wire.begin(I2C_SLAVE_ADDRESS);
+    Wire.onReceive(receiveCommand);
     Wire.onRequest(sendRPY);
     
     delay(1000);
@@ -65,7 +67,27 @@ void setup()
  */
 void loop()
 {
-    
+    delay(100);
+}
+
+/**
+ * I2C receive callback that reads a command from the I2C master
+ * 
+ * @param numBytes The number of bytes available to read
+ * 
+ * @return None
+ */
+void receiveCommand(int numBytes)
+{
+    if(numBytes > 0)
+    {
+        readIMU = true;
+    }
+
+    for(int i = 0; i < numBytes; i++)
+    {
+        char value = Wire.read();
+    }
 }
 
 /**
@@ -97,31 +119,36 @@ void TaskReadIMU(void * pvParameters)
 
     while(true)
     {
-        // Retrieve RPY
-        sensors_event_t event;
-        bno.getEvent(&event);
+        if(readIMU)
+        {
+            // Retrieve RPY
+            sensors_event_t event;
+            bno.getEvent(&event);
 
-        FloatToBytes roll;
-        FloatToBytes pitch;
-        FloatToBytes yaw;
+            FloatToBytes roll;
+            FloatToBytes pitch;
+            FloatToBytes yaw;
 
-        roll.value = -event.orientation.z;
-        pitch.value = event.orientation.y;
-        yaw.value = map(event.orientation.x, 0.0, 360.0, -180.0, 180.0);
+            roll.value = -event.orientation.z;
+            pitch.value = event.orientation.y;
+            yaw.value = map(event.orientation.x, 0.0, 360.0, -180.0, 180.0);
 
-        // Store RPY in a byte buffer
-        rpyBuffer[0] = roll.bytes[0];
-        rpyBuffer[1] = roll.bytes[1];
-        rpyBuffer[2] = roll.bytes[2];
-        rpyBuffer[3] = roll.bytes[3];
-        rpyBuffer[4] = pitch.bytes[0];
-        rpyBuffer[5] = pitch.bytes[1];
-        rpyBuffer[6] = pitch.bytes[2];
-        rpyBuffer[7] = pitch.bytes[3];
-        rpyBuffer[8] = yaw.bytes[0];
-        rpyBuffer[9] = yaw.bytes[1];
-        rpyBuffer[10] = yaw.bytes[2];
-        rpyBuffer[11] = yaw.bytes[3];
+            // Store RPY in a byte buffer
+            rpyBuffer[0] = roll.bytes[0];
+            rpyBuffer[1] = roll.bytes[1];
+            rpyBuffer[2] = roll.bytes[2];
+            rpyBuffer[3] = roll.bytes[3];
+            rpyBuffer[4] = pitch.bytes[0];
+            rpyBuffer[5] = pitch.bytes[1];
+            rpyBuffer[6] = pitch.bytes[2];
+            rpyBuffer[7] = pitch.bytes[3];
+            rpyBuffer[8] = yaw.bytes[0];
+            rpyBuffer[9] = yaw.bytes[1];
+            rpyBuffer[10] = yaw.bytes[2];
+            rpyBuffer[11] = yaw.bytes[3];
+
+            readIMU = false;
+        }
 
         vTaskDelay(BNO_TICK_DELAY);
     }
